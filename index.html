@@ -36,7 +36,8 @@
 
   /* Calendar */
   .sunday-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-  .sunday-card.blocked { opacity: 0.5; background: #f3f4f6; }
+  .sunday-card.blocked { opacity: 0.6; background: #f3f4f6; }
+  .sunday-card.blocked-gc { opacity: 0.7; background: linear-gradient(135deg, #fef2f2, #fee2e2); border-color: #fca5a5; }
   .sunday-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
   .sunday-date { font-weight: 700; font-size: 1.05rem; }
   .sunday-label { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: 600; }
@@ -549,13 +550,23 @@ let assignments = [];
 let nextAssignId = 1;
 let nextMemberId = members.length + 1;
 
+const DATA_VERSION = 'v2-dummy'; // bump this to force a re-seed
+
 function saveState() {
   localStorage.setItem('ta_members', JSON.stringify(members));
   localStorage.setItem('ta_assignments', JSON.stringify(assignments));
   localStorage.setItem('ta_nextAssignId', nextAssignId);
   localStorage.setItem('ta_nextMemberId', nextMemberId);
+  localStorage.setItem('ta_dataVersion', DATA_VERSION);
 }
 function loadState() {
+  if (localStorage.getItem('ta_dataVersion') !== DATA_VERSION) {
+    // Wipe and seed dummy data
+    localStorage.clear();
+    seedDummyData();
+    saveState();
+    return;
+  }
   const m = localStorage.getItem('ta_members');
   const a = localStorage.getItem('ta_assignments');
   if (m) members = JSON.parse(m);
@@ -565,7 +576,168 @@ function loadState() {
   const nmid = localStorage.getItem('ta_nextMemberId');
   if (nmid) nextMemberId = parseInt(nmid);
 }
-loadState();
+
+function seedDummyData() {
+  // Use a seeded random for reproducibility
+  let seed = 42;
+  function rand() { seed = (seed * 16807 + 0) % 2147483647; return seed / 2147483647; }
+
+  // Assign random lastSpoke dates to ~60% of adult members and ~40% of youth
+  for (const m of members) {
+    // Ensure phone/email/moveInDate fields exist
+    if (!m.phone) m.phone = '';
+    if (!m.email) m.email = '';
+    if (!m.moveInDate) m.moveInDate = null;
+    if (m.isNew === undefined) m.isNew = false;
+
+    const r = rand();
+    if (m.group === 'adult') {
+      if (r < 0.25) {
+        // Spoke within last year — not yet eligible
+        const daysAgo = Math.floor(rand() * 365) + 30;
+        m.lastSpoke = toDateStr(new Date(TODAY.getTime() - daysAgo * 86400000));
+      } else if (r < 0.45) {
+        // Spoke 1-2 years ago — approaching eligibility
+        const daysAgo = Math.floor(rand() * 365) + 366;
+        m.lastSpoke = toDateStr(new Date(TODAY.getTime() - daysAgo * 86400000));
+      } else if (r < 0.60) {
+        // Spoke 2+ years ago — overdue
+        const daysAgo = Math.floor(rand() * 365) + 731;
+        m.lastSpoke = toDateStr(new Date(TODAY.getTime() - daysAgo * 86400000));
+      }
+      // else: null (never spoken) — ~40%
+    } else {
+      if (r < 0.40) {
+        // Spoke within last year
+        const daysAgo = Math.floor(rand() * 300) + 30;
+        m.lastSpoke = toDateStr(new Date(TODAY.getTime() - daysAgo * 86400000));
+      }
+      // else: null (never spoken)
+    }
+  }
+
+  // Mark 5 members as recent move-ins
+  const newMoveIns = [
+    { name: 'Santiago Rivera', age: 34, daysAgo: 12 },
+    { name: 'Emily Rivera', age: 32, daysAgo: 12 },
+    { name: 'Marcus & Tanya Chen', age: 29, daysAgo: 25 },
+    { name: 'Abigail Whitmore', age: 15, daysAgo: 8 },
+    { name: 'Derek Olsen', age: 41, daysAgo: 45 },
+    { name: 'Priya Patel', age: 27, daysAgo: 5 },
+  ];
+  for (const nm of newMoveIns) {
+    const names = nm.name.includes(' & ') ? (() => {
+      const [first, rest] = nm.name.split(' & ');
+      const lastName = first.split(' ').pop();
+      return [first, rest.includes(' ') ? rest : `${rest} ${lastName}`];
+    })() : [nm.name];
+
+    for (const name of names) {
+      members.push({
+        id: nextMemberId++,
+        name,
+        age: nm.age,
+        phone: '',
+        email: '',
+        lastSpoke: null,
+        group: nm.age < 18 ? 'youth' : 'adult',
+        moveInDate: toDateStr(new Date(TODAY.getTime() - nm.daysAgo * 86400000)),
+        isNew: true,
+      });
+    }
+  }
+
+  // Create some in-progress assignments for the next schedulable Sundays
+  const sundays = [];
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+  for (let i = 0; i < 8; i++) {
+    const ds = toDateStr(new Date(d));
+    if (!isBlocked(ds)) sundays.push(ds);
+    d.setDate(d.getDate() + 7);
+  }
+
+  // Pick some members for assignments
+  const adultPool = members.filter(m => m.group === 'adult' && !m.isNew);
+  const youthPool = members.filter(m => m.group === 'youth' && !m.isNew);
+
+  const statuses = ['CONTACTED', 'ACCEPTED', 'TOPIC_SHARED'];
+  const topics = [
+    'The Power of Prayer', 'Faith in Difficult Times', 'Service and Christlike Love',
+    'Gratitude and Blessings', 'Following the Prophet', 'Repentance and the Atonement',
+    'Temple Blessings', 'The Holy Ghost as a Guide', 'Strengthening Families',
+  ];
+
+  if (sundays.length >= 2) {
+    // Sunday 1: fully assigned, further along in pipeline
+    const s1 = sundays[0];
+    const a1Adults = [adultPool[2], adultPool[15]];
+    const a1Youth = youthPool[0];
+    for (const m of a1Adults) {
+      if (!m) continue;
+      const topicIdx = Math.floor(rand() * topics.length);
+      assignments.push({
+        id: nextAssignId++, memberId: m.id, sundayDate: s1,
+        status: 'TOPIC_SHARED', topic: topics[topicIdx], notes: '',
+        history: [
+          { status: 'SUGGESTED', ts: new Date(TODAY.getTime() - 14 * 86400000).toISOString() },
+          { status: 'CONTACTED', ts: new Date(TODAY.getTime() - 12 * 86400000).toISOString() },
+          { status: 'ACCEPTED', ts: new Date(TODAY.getTime() - 10 * 86400000).toISOString() },
+          { status: 'TOPIC_SHARED', ts: new Date(TODAY.getTime() - 5 * 86400000).toISOString() },
+        ]
+      });
+    }
+    if (a1Youth) {
+      assignments.push({
+        id: nextAssignId++, memberId: a1Youth.id, sundayDate: s1,
+        status: 'ACCEPTED', topic: 'Choosing the Right', notes: '',
+        history: [
+          { status: 'SUGGESTED', ts: new Date(TODAY.getTime() - 14 * 86400000).toISOString() },
+          { status: 'CONTACTED', ts: new Date(TODAY.getTime() - 11 * 86400000).toISOString() },
+          { status: 'ACCEPTED', ts: new Date(TODAY.getTime() - 8 * 86400000).toISOString() },
+        ]
+      });
+    }
+
+    // Sunday 2: partially assigned
+    if (sundays.length >= 2) {
+      const s2 = sundays[1];
+      const a2Adult = adultPool[30];
+      if (a2Adult) {
+        assignments.push({
+          id: nextAssignId++, memberId: a2Adult.id, sundayDate: s2,
+          status: 'CONTACTED', topic: '', notes: 'Left voicemail',
+          history: [
+            { status: 'SUGGESTED', ts: new Date(TODAY.getTime() - 5 * 86400000).toISOString() },
+            { status: 'CONTACTED', ts: new Date(TODAY.getTime() - 3 * 86400000).toISOString() },
+          ]
+        });
+      }
+    }
+  }
+
+  // Add some completed past assignments
+  const pastTopics = [
+    'Covenant Keeping', 'The Book of Mormon in My Life', 'Missionary Work',
+    'Forgiveness', 'Trusting God\'s Plan', 'Sabbath Day Observance',
+  ];
+  const pastMembers = [adultPool[5], adultPool[10], adultPool[20], adultPool[25], adultPool[40], adultPool[50]];
+  let pastWeeks = 2;
+  for (const pm of pastMembers) {
+    if (!pm) continue;
+    pastWeeks += Math.floor(rand() * 3) + 1;
+    const pastSunday = toDateStr(new Date(TODAY.getTime() - pastWeeks * 7 * 86400000));
+    pm.lastSpoke = pastSunday;
+    assignments.push({
+      id: nextAssignId++, memberId: pm.id, sundayDate: pastSunday,
+      status: 'COMPLETED', topic: pastTopics[Math.floor(rand() * pastTopics.length)], notes: '',
+      history: [
+        { status: 'SUGGESTED', ts: new Date(TODAY.getTime() - (pastWeeks * 7 + 14) * 86400000).toISOString() },
+        { status: 'COMPLETED', ts: new Date(TODAY.getTime() - pastWeeks * 7 * 86400000).toISOString() },
+      ]
+    });
+  }
+}
 
 // ── DATE HELPERS ──────────────────────────────────────────────────
 const TODAY = new Date();
@@ -798,11 +970,16 @@ function renderCalendar() {
     else if (filledCount === 3) { labelClass = 'label-full'; labelText = 'Fully Assigned'; }
     else if (filledCount > 0) { labelClass = 'label-partial'; labelText = `${filledCount}/3 Assigned`; }
 
-    html += `<div class="sunday-card ${blocked ? 'blocked' : ''}">
+    const gc = isGeneralConference(s);
+    const cardClass = gc ? 'blocked-gc' : (blocked ? 'blocked' : '');
+    html += `<div class="sunday-card ${cardClass}">
       <div class="sunday-header">
         <span class="sunday-date">${fmtDate(s)}</span>
         <span class="sunday-label ${labelClass}">${labelText}</span>
       </div>`;
+    if (gc) {
+      html += `<div style="padding:8px;color:#991b1b;font-size:0.85rem;">No sacrament meeting talks — General Conference weekend. Watch at churchofjesuschrist.org</div>`;
+    }
     if (!blocked) {
       html += renderSlot(adultSlots[0], s, 'adult', 'Adult 1 (12 min)');
       html += renderSlot(adultSlots[1], s, 'adult', 'Adult 2 (12 min)');
@@ -1070,6 +1247,8 @@ function resetAllData() {
     assignments = [];
     nextAssignId = 1;
     nextMemberId = members.length + 1;
+    seedDummyData();
+    saveState();
     renderAll();
   }
 }
