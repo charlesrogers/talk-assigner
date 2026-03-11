@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Talk Assigner</title>
+<style>
+  :root {
+    --bg: #f8f9fa; --card: #fff; --border: #dee2e6; --primary: #2563eb;
+    --primary-hover: #1d4ed8; --danger: #dc3545; --success: #16a34a;
+    --warning: #f59e0b; --muted: #6b7280; --text: #1f2937;
+    --youth-bg: #ede9fe; --adult-bg: #eff6ff; --newin-bg: #fef3c7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 16px; }
+  h1 { font-size: 1.5rem; margin-bottom: 4px; }
+  h2 { font-size: 1.15rem; margin-bottom: 12px; color: var(--primary); }
+  .subtitle { color: var(--muted); font-size: 0.85rem; margin-bottom: 20px; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+  .tab { padding: 8px 18px; cursor: pointer; border: none; background: none; font-size: 0.95rem;
+    border-bottom: 2px solid transparent; margin-bottom: -2px; color: var(--muted); position: relative; }
+  .tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .tab:hover { color: var(--text); }
+  .tab-badge { position: absolute; top: 2px; right: 2px; background: var(--danger); color: #fff;
+    font-size: 0.6rem; width: 16px; height: 16px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* Alert banner */
+  .alert-banner { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1px solid #f59e0b;
+    border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; }
+  .alert-banner-icon { font-size: 1.3rem; }
+  .alert-banner-text { flex: 1; }
+  .alert-banner-title { font-weight: 700; font-size: 0.95rem; }
+  .alert-banner-sub { font-size: 0.8rem; color: #92400e; }
+
+  /* Calendar */
+  .sunday-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+  .sunday-card.blocked { opacity: 0.5; background: #f3f4f6; }
+  .sunday-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .sunday-date { font-weight: 700; font-size: 1.05rem; }
+  .sunday-label { font-size: 0.75rem; padding: 3px 8px; border-radius: 12px; font-weight: 600; }
+  .label-blocked { background: #fee2e2; color: var(--danger); }
+  .label-open { background: #fef3c7; color: #92400e; }
+  .label-partial { background: #dbeafe; color: var(--primary); }
+  .label-full { background: #dcfce7; color: var(--success); }
+  .slot { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 6px; margin-bottom: 6px; }
+  .slot-youth { background: var(--youth-bg); }
+  .slot-adult { background: var(--adult-bg); }
+  .slot-label { font-size: 0.75rem; color: var(--muted); min-width: 80px; }
+  .slot-name { font-weight: 500; flex: 1; }
+  .slot-empty { color: var(--muted); font-style: italic; }
+
+  /* Member Table */
+  .filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .filters input, .filters select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+  .filters input[type="text"] { flex: 1; min-width: 200px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th { text-align: left; padding: 8px; border-bottom: 2px solid var(--border); color: var(--muted); font-size: 0.75rem; text-transform: uppercase; cursor: pointer; }
+  th:hover { color: var(--text); }
+  td { padding: 8px; border-bottom: 1px solid #f0f0f0; }
+  tr:hover td { background: #f8fafc; }
+  tr.new-member-row td { background: #fffbeb; }
+  .age-badge { font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+  .age-youth { background: var(--youth-bg); color: #6d28d9; }
+  .age-adult { background: var(--adult-bg); color: var(--primary); }
+  .new-badge { background: var(--newin-bg); color: #92400e; font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; font-weight: 600; margin-left: 4px; }
+  .overdue { color: var(--danger); font-weight: 600; }
+  .eligible { color: var(--success); }
+  .not-yet { color: var(--muted); }
+
+  /* Buttons */
+  .btn { padding: 5px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.8rem; font-weight: 500; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-sm { padding: 3px 8px; font-size: 0.75rem; }
+  .btn-outline { background: none; border: 1px solid var(--border); color: var(--text); }
+  .btn-outline:hover { background: #f3f4f6; }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: #15803d; }
+  .btn-warning { background: var(--warning); color: #fff; }
+  .btn-danger { background: var(--danger); color: #fff; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; justify-content: center; align-items: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--card); border-radius: 10px; padding: 24px; max-width: 550px; width: 90%; max-height: 85vh; overflow-y: auto; }
+  .modal h3 { margin-bottom: 16px; }
+  .modal label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+  .modal input, .modal select, .modal textarea { width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.85rem; }
+  .modal textarea { height: 60px; resize: vertical; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Pipeline */
+  .pipeline-row { display: flex; align-items: center; gap: 6px; padding: 10px; background: var(--card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .pipeline-name { font-weight: 600; min-width: 180px; }
+  .pipeline-date { color: var(--muted); font-size: 0.8rem; min-width: 100px; }
+  .pipeline-topic { font-size: 0.8rem; color: var(--muted); flex: 1; min-width: 150px; }
+  .status-pill { font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; font-weight: 600; text-transform: uppercase; }
+  .status-suggested { background: #f3f4f6; color: var(--muted); }
+  .status-contacted { background: #dbeafe; color: var(--primary); }
+  .status-accepted { background: #dcfce7; color: var(--success); }
+  .status-declined { background: #fee2e2; color: var(--danger); }
+  .status-topic_shared { background: #fef3c7; color: #92400e; }
+  .status-reminder_sent { background: #ede9fe; color: #6d28d9; }
+  .status-completed { background: #d1fae5; color: #065f46; }
+
+  /* History */
+  .history-entry { padding: 8px; border-bottom: 1px solid #f0f0f0; font-size: 0.85rem; }
+  .history-entry:last-child { border-bottom: none; }
+
+  .stats-row { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; flex: 1; min-width: 120px; }
+  .stat-num { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+  .stat-label { font-size: 0.75rem; color: var(--muted); }
+
+  .assign-list { max-height: 350px; overflow-y: auto; }
+  .assign-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; }
+  .assign-item:hover { background: #f3f4f6; }
+  .assign-priority { font-size: 0.7rem; padding: 1px 6px; border-radius: 8px; white-space: nowrap; }
+  .priority-overdue { background: #fee2e2; color: var(--danger); }
+  .priority-eligible { background: #dcfce7; color: var(--success); }
+  .priority-not-yet { background: #f3f4f6; color: var(--muted); }
+  .priority-new { background: var(--newin-bg); color: #92400e; }
+
+  /* Import area */
+  .import-section { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  .import-section h3 { font-size: 1rem; margin-bottom: 8px; }
+  .import-section p { font-size: 0.8rem; color: var(--muted); margin-bottom: 8px; }
+  .import-drop { border: 2px dashed var(--border); border-radius: 8px; padding: 24px; text-align: center; color: var(--muted);
+    cursor: pointer; transition: border-color 0.2s, background 0.2s; }
+  .import-drop:hover, .import-drop.dragover { border-color: var(--primary); background: #eff6ff; }
+  .import-drop input { display: none; }
+  .import-results { margin-top: 12px; padding: 12px; background: #f0fdf4; border-radius: 6px; font-size: 0.85rem; display: none; }
+  .import-results.show { display: block; }
+  .import-results.error { background: #fef2f2; }
+
+  .csv-spec { background: #f8fafc; border: 1px solid var(--border); border-radius: 6px; padding: 12px; font-size: 0.8rem; margin: 8px 0; }
+  .csv-spec code { background: #e2e8f0; padding: 1px 4px; border-radius: 3px; font-size: 0.75rem; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<h1>Ward Talk Assigner</h1>
+<p class="subtitle">3-week scheduling window · 2 adults (12 min) + 1 youth (5 min) per Sunday</p>
+
+<div id="move-in-banner"></div>
+<div class="stats-row" id="stats"></div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="calendar">Calendar</button>
+  <button class="tab" data-tab="members">Members <span id="new-badge" class="tab-badge" style="display:none;"></span></button>
+  <button class="tab" data-tab="pipeline">Pipeline</button>
+  <button class="tab" data-tab="history">History</button>
+  <button class="tab" data-tab="import">Import / Export</button>
+</div>
+
+<div class="panel active" id="panel-calendar"></div>
+<div class="panel" id="panel-members"></div>
+<div class="panel" id="panel-pipeline"></div>
+<div class="panel" id="panel-history"></div>
+<div class="panel" id="panel-import"></div>
+
+<!-- Assign Modal -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal">
+    <h3 id="assign-modal-title">Assign Speaker</h3>
+    <label>Slot</label>
+    <div id="assign-slot-info" style="font-weight:600;margin-bottom:8px;"></div>
+    <label>Search Members</label>
+    <input type="text" id="assign-search" placeholder="Type to filter..." oninput="filterAssignList()">
+    <div class="assign-list" id="assign-list"></div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('assign-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Status Modal -->
+<div class="modal-overlay" id="status-modal">
+  <div class="modal">
+    <h3>Update Assignment</h3>
+    <div id="status-modal-info"></div>
+    <label>Status</label>
+    <select id="status-select">
+      <option value="SUGGESTED">Suggested</option>
+      <option value="CONTACTED">Contacted</option>
+      <option value="ACCEPTED">Accepted</option>
+      <option value="DECLINED">Declined</option>
+      <option value="TOPIC_SHARED">Topic Shared</option>
+      <option value="REMINDER_SENT">Reminder Sent</option>
+      <option value="COMPLETED">Completed</option>
+    </select>
+    <label>Topic</label>
+    <input type="text" id="status-topic" placeholder="e.g., Faith in adversity">
+    <label>Notes</label>
+    <textarea id="status-notes" placeholder="Optional notes..."></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal('status-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStatus()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── RAW DATA ─────────────────────────────────────────────────────
+const RAW_CSV = `Aldridge, Heidi Lyn,,21
+Allen, Jake & Hadley Suzanne,,80
+Allen, Meg,,40
+Allen, Richard & Allyson,,84
+Anthony, Griffin,,71
+Arbon, Debra,,62
+Arbon, Parry & Alexa,,22
+Barlow, Jon & Kjersti,,26
+Bartlett, Randy & Norma,,92
+Beckstead, LaMar & Penny,,88
+Bell, Jeri,,33
+Bennion, James,,90
+Bohlender, Joelle Lynne,,57
+Borgesen, Yetta,,63
+Bowen, Randy & Shiela,,38
+Boynton, Melodie,,16
+Bringhurst, Brit,,63
+Bringhurst, Jeffrey & Kimberly,,67
+Brower, Katherine,,51
+Brower, Richard & Wendy,,25
+Brower, Samuel,,43
+Burton, Kirt & Kristine,,79
+Butler, Suzanne,,98
+Butt, Kassie Mary,,77
+Carruth, David & Kim,,33
+Clausen, Anthony & Heidi,,29
+Clayton, Craig & Betsy,,44
+Cloward, Joshua & Megan Kincaid,,95
+Colley, Mark & Rebecca,,46
+Collins, Chase & Kelsey Elise,,57
+Collins, Christian & Rochelle,,34
+da Silva, Thaianne,,46
+Dailey, Steve & Heidi,,65
+Daines, Jacob & Anita,,80
+Daines, Ray & Barbara,,20
+Daines, Terry & Linda,,70
+DeHaas, John & Michelle,,29
+Delatore, Jesse & Sandy,,35
+Denton, Layne & Jennifer,,94
+Denzer, Abraham & Andrea,,82
+Drechsel, Michael & AnnaMae,,66
+Dunn, Colton Tav & Kelsea,,65
+Dyckman, Debbie,,80
+Ebell, Ada,,70
+Eckman, Bethany,,63
+Eicher, Jonathan Ray & Tonia Marie,,18
+Elder, Lyla,,76
+Eldredge, Glenn & Michele,,68
+Eldredge, Kaylene,,27
+Engle, James David & Colette,,63
+Evenson, Janet,,89
+Farnsworth, Jacque,,32
+Ferguson, Isa,,81
+Ferguson, Lance & Angela,,99
+Fortner, Carolyn,,74
+Fox, Verl & Judy,,82
+Fuller, Scott,,73
+Gandley, Thomas & Maria del Carmen Suarez,,52
+Gandre, Dorothy Diane,,77
+Gardner, William,,19
+Garrett, Patricia,,45
+Gibbs, Trent & Melissa,,27
+Gilbert, Karen,,73
+Gillett, Jeffery Paul,,100
+Glade, Benjamin,,91
+Glissmeyer, Devan & Erika,,71
+Glissmeyer, Elijah & Sarah,,68
+Goodwin, Jace & Ashley Jordan,,88
+Griesmyer, Rob & Tiffany Nicole,,13
+Gruter, Fred Theodor & Evelyn,,90
+Halling, David & Joyce,,27
+Halling, Michael,,16
+Hansen, Lyssa,,90
+Hansen, Ross Drechsel & Janice,,52
+Harris, Austin Wade & Kendra Marjorie,,63
+Harrison, Mark & Courtney,,87
+Hawke, Eileen,,30
+Haws, Clinton,,35
+Haws, Derrick,,31
+Henderson, Jean,,92
+Henderson, Mike & Dyanna,,43
+Hendrickson, Steven & Nancy,,69
+Herbert, Ben,,54
+Herbert, Paul,,60
+Herd, Sean & Helen,,60
+Hess, Reid & Marlo,,70
+Hewitt, Kathleen,,34
+Hibler, Chad Michael & Jenee,,98
+Hill, Alexander Kay & Ashley,,75
+Holland, Kevin Ray & Sharon,,30
+Holmes, Edward & Allison,,89
+Holmes, Joshua & Emma Kate,,42
+Janes, Carter,,60
+Janzen, Tiffany Bonee,,89
+Jay, Judy,,56
+Jensen, Joan,,49
+Jensen, Travis & Pam,,12
+Jessen, Brayden & Taryn,,23
+Johnson, Travis & Nicki,,66
+Johnston, Keith & Tiffini,,88
+Jones, Glenn & Lindy,,70
+Jones, Jeremy & Sher,,44
+Jones, La Mar & Marsha,,61
+Kartchner, Ryan,,100
+Kasteler, Richard,,59
+Lanningham, Aaron Lynn & Pamla,,80
+Larkin, Jaden,,84
+Larkin, Todd & Angela,,55
+Larsen, Larry & Carolyn,,56
+Larson, Robert & Marilyn,,99
+Lawrence, Elaine,,87
+Lawson, Chad & Katie,,27
+Leonis, Marilyn Kay,,26
+Lo, Olivia,,47
+Lo, Raymond & Emigh,,63
+Lowry, Fred & Tami,,69
+Ludwig, Ashley,,65
+Ludwig, Laurel,,90
+Macy, Pat & Laurie,,54
+Martin, Connor & Emilee,,46
+Matthews, Kelley James & Coree Leigh,,47
+Mc Cleery, Troy & Marcene,,95
+McAllister, John & Lindsay,,66
+McCandless, Chris & Susan,,27
+McCullough, Craig & Patricia,,40
+McCullough, Melinda Marie,,39
+McEntire, Bryan & Darla,,99
+McLelland, Michael & Kerry,,74
+Mertens, Thomas & Deborah,,82
+Molen, Rebecca,,55
+Monsen, Brian & Misty,,35
+Monsen, Daxton,,43
+Monsen, Treyden,,58
+Mower, Russ & Wendy,,86
+Nehren, Robert & Caroline,,73
+Nielsen, Brett Alan,,88
+Nielsen, Gerald,,30
+Nofsinger, Richard & Sharon,,94
+Nord, Kirk & Andrea,,63
+Nord, Nicholas & Emilie Nicole,,65
+Nordhoff, Michael,,56
+Norling, Eric & Allyson,,78
+Norton, Kent & Jana,,69
+Ockey, Robin & Celia,,71
+Offret, Betty,,26
+Oliveira, Priscilla,,38
+Opfar, Scott & Maria,,40
+Pathakis, Lori,,88
+Pearson, Carolyn,,85
+Peck, Rickie,,54
+Peel, David Robbin & Bonnie,,36
+Perry, Marty Lane & Kathy Ann,,38
+Pope, Donna,,48
+Reynolds, Sandy,,34
+Richards, Kathy,,91
+Richardson, Jeff & Marianne,,83
+Roberts, Susan Kay,,75
+Robin, Cory,,18
+Robinson, Samuel Dennis & Stacie,,90
+Rockowitz, Tracy,,70
+Rogers, Charles & Catherine,,27
+Rosser, Brandon,,89
+Ryan, Joshua Nathan & Jimianne,,20
+Sabey, Gaylen & Julie,,31
+Schow, Kirsten,,85
+Schwabedissen, Craig & Ann,,95
+Scow, Darrel,,80
+Seal, Trevor & Anne,,21
+Seely, Mike & Michelle,,36
+Shurtliff, Charles & Deborah,,25
+Siaperas, Kristin,,52
+Smart, Ronald,,98
+Smith, Beverly,,86
+Smith, Brittny Kae,,79
+Smith, Jarreau Lamaar & Leah Rei Kawena,,28
+Souders, Jodi Lynn,,24
+Spencer, Paula,,97
+Spendlove, Avary,,27
+Stebbins, Whitnee,,63
+Stephens, Jason,,65
+Stephens, Kevin & Linda,,52
+Stephens, Maggie,,45
+Stimatz, Milan Wayne,,65
+Stolworthy, Paul & Heather,,72
+Stout, Barry & Bonnie,,17
+Sugden, Kenneth & Heide,,22
+Swenson, Mary Jane,,67
+Tasker, Scott & Heather,,29
+Taucher, Julie,,34
+Thompson, Destiny,,78
+Thornton, Matt & Heidi,,15
+Walker, Kathy,,83
+Ward, Bruce & Erika,,91
+Webster, Harry & Lawna,,34
+Webster, Thayne & Rosanne,,34
+Westover, Michael & Brittany,,68
+Whitney, Colby & Rebecca Ann,,16
+Whittle, Jacob & Kait,,76
+Wilding, Michelle,,28
+Wilhelmsen, Jeffrey & Chris,,68
+Williams, Grant,,13
+Wohlhueter, Chris Carl & Veronica,,56
+Wood, Dean L & Teddy,,43
+Zundel, Bryce & Diane,,23`;
+
+// ── PARSE HELPERS ─────────────────────────────────────────────────
+// Normalize a name for matching: lowercase, collapse whitespace, strip accents
+function normName(n) {
+  return n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+// Parse the original "Last, First & Spouse" format (no header)
+function parseOriginalCSV(csv) {
+  const out = [];
+  let id = 1;
+  for (const line of csv.split('\n')) {
+    const parts = line.split(',,');
+    if (parts.length < 2) continue;
+    const rawName = parts[0].trim().replace(/^"|"$/g, '');
+    const age = parseInt(parts[1]);
+    if (!rawName || isNaN(age)) continue;
+    const commaIdx = rawName.indexOf(',');
+    if (commaIdx === -1) continue;
+    const lastName = rawName.substring(0, commaIdx).trim();
+    const firstPart = rawName.substring(commaIdx + 1).trim();
+
+    if (firstPart.includes(' & ')) {
+      const ampIdx = firstPart.indexOf(' & ');
+      const first1 = firstPart.substring(0, ampIdx).trim();
+      const first2 = firstPart.substring(ampIdx + 3).trim();
+      out.push({ id: id++, name: `${first1} ${lastName}`, age, lastSpoke: null, group: age < 18 ? 'youth' : 'adult', moveInDate: null, isNew: false, phone: '', email: '' });
+      out.push({ id: id++, name: `${first2} ${lastName}`, age, lastSpoke: null, group: age < 18 ? 'youth' : 'adult', moveInDate: null, isNew: false, phone: '', email: '' });
+    } else {
+      out.push({ id: id++, name: `${firstPart} ${lastName}`, age, lastSpoke: null, group: age < 18 ? 'youth' : 'adult', moveInDate: null, isNew: false, phone: '', email: '' });
+    }
+  }
+  return out;
+}
+
+// Parse an imported CSV with headers:
+// Expected columns: Name, Age, Phone, Email, Move-In Date
+// Name can be "Last, First" or "Last, First & Spouse" or "First Last"
+function parseImportCSV(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) return [];
+
+  // Detect header
+  const headerLine = lines[0];
+  const sep = headerLine.includes('\t') ? '\t' : ',';
+  const headers = parseCSVLine(headerLine, sep).map(h => h.toLowerCase().trim());
+
+  const nameIdx = headers.findIndex(h => h === 'name' || h === 'preferred name' || h === 'full name');
+  const ageIdx = headers.findIndex(h => h === 'age');
+  const phoneIdx = headers.findIndex(h => h.includes('phone'));
+  const emailIdx = headers.findIndex(h => h.includes('email'));
+  const moveInIdx = headers.findIndex(h => h.includes('move') || h.includes('move-in') || h.includes('movein'));
+
+  if (nameIdx === -1) return null; // can't find name column
+
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCSVLine(lines[i], sep);
+    const rawName = (cols[nameIdx] || '').trim();
+    if (!rawName) continue;
+    // Skip alphabet header rows (single letter)
+    if (/^[A-Z]$/.test(rawName)) continue;
+
+    const age = ageIdx >= 0 ? parseInt(cols[ageIdx]) : 0;
+    const phone = phoneIdx >= 0 ? (cols[phoneIdx] || '').trim() : '';
+    const email = emailIdx >= 0 ? (cols[emailIdx] || '').trim() : '';
+    const moveIn = moveInIdx >= 0 ? (cols[moveInIdx] || '').trim() : '';
+
+    // Split couples
+    const people = splitName(rawName);
+    for (const name of people) {
+      out.push({
+        name,
+        age: isNaN(age) ? 0 : age,
+        phone,
+        email,
+        moveInDate: moveIn || null,
+        group: age >= 12 && age < 18 ? 'youth' : 'adult',
+      });
+    }
+  }
+  return out;
+}
+
+// Handle CSV quoting
+function parseCSVLine(line, sep) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < line.length && line[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = false;
+      } else current += ch;
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === sep) { result.push(current); current = ''; }
+      else current += ch;
+    }
+  }
+  result.push(current);
+  return result;
+}
+
+// Split "Last, First & Spouse" into individual names
+function splitName(rawName) {
+  const commaIdx = rawName.indexOf(',');
+  if (commaIdx >= 0) {
+    const lastName = rawName.substring(0, commaIdx).trim();
+    const firstPart = rawName.substring(commaIdx + 1).trim();
+    if (firstPart.includes(' & ')) {
+      const ampIdx = firstPart.indexOf(' & ');
+      return [
+        `${firstPart.substring(0, ampIdx).trim()} ${lastName}`,
+        `${firstPart.substring(ampIdx + 3).trim()} ${lastName}`
+      ];
+    }
+    return [`${firstPart} ${lastName}`];
+  }
+  // "First Last" format — check for &
+  if (rawName.includes(' & ')) {
+    // "First1 & First2 Last" pattern
+    const parts = rawName.split(' ');
+    const ampIdx = parts.indexOf('&');
+    if (ampIdx > 0 && ampIdx < parts.length - 1) {
+      const last = parts.slice(ampIdx + 2).join(' ') || parts[parts.length - 1];
+      return [parts.slice(0, ampIdx).join(' ') + ' ' + last, parts.slice(ampIdx + 1).join(' ')];
+    }
+  }
+  return [rawName];
+}
+
+// ── STATE ─────────────────────────────────────────────────────────
+let members = parseOriginalCSV(RAW_CSV);
+let assignments = [];
+let nextAssignId = 1;
+let nextMemberId = members.length + 1;
+
+function saveState() {
+  localStorage.setItem('ta_members', JSON.stringify(members));
+  localStorage.setItem('ta_assignments', JSON.stringify(assignments));
+  localStorage.setItem('ta_nextAssignId', nextAssignId);
+  localStorage.setItem('ta_nextMemberId', nextMemberId);
+}
+function loadState() {
+  const m = localStorage.getItem('ta_members');
+  const a = localStorage.getItem('ta_assignments');
+  if (m) members = JSON.parse(m);
+  if (a) assignments = JSON.parse(a);
+  const nid = localStorage.getItem('ta_nextAssignId');
+  if (nid) nextAssignId = parseInt(nid);
+  const nmid = localStorage.getItem('ta_nextMemberId');
+  if (nmid) nextMemberId = parseInt(nmid);
+}
+loadState();
+
+// ── DATE HELPERS ──────────────────────────────────────────────────
+const TODAY = new Date();
+const TODAY_STR = toDateStr(TODAY);
+function toDateStr(d) { return d.toISOString().split('T')[0]; }
+function parseDate(s) { const [y,m,d] = s.split('-'); return new Date(y, m-1, d); }
+function fmtDate(s) {
+  const d = parseDate(s);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+}
+function daysBetween(d1, d2) { return Math.floor((d2 - d1) / (1000 * 60 * 60 * 24)); }
+
+function getSchedulableSundays() {
+  const all = [];
+  const d = new Date(TODAY);
+  d.setDate(d.getDate() + ((7 - d.getDay()) % 7 || 7));
+  for (let i = 0; i < 8; i++) {
+    all.push(toDateStr(new Date(d)));
+    d.setDate(d.getDate() + 7);
+  }
+  return all;
+}
+
+function isFirstSunday(dateStr) {
+  const d = parseDate(dateStr);
+  return d.getDate() <= 7;
+}
+function isGeneralConference(dateStr) {
+  const d = parseDate(dateStr);
+  const m = d.getMonth();
+  return (m === 3 || m === 9) && d.getDate() <= 7;
+}
+function isBlocked(dateStr) { return isFirstSunday(dateStr) || isGeneralConference(dateStr); }
+function blockReason(dateStr) {
+  if (isGeneralConference(dateStr)) return 'General Conference';
+  if (isFirstSunday(dateStr)) return 'Fast Sunday';
+  return '';
+}
+
+// ── ELIGIBILITY ───────────────────────────────────────────────────
+function getEligibility(member) {
+  // New members (moved in within 90 days, never spoken) get top priority
+  if (member.isNew && !member.lastSpoke) {
+    const daysIn = member.moveInDate ? daysBetween(parseDate(member.moveInDate), TODAY) : 0;
+    return { status: 'new', label: `New move-in (${daysIn}d ago)`, priority: 10000 + daysIn };
+  }
+  if (!member.lastSpoke) return { status: 'overdue', label: 'Never spoken', priority: 0 };
+  const last = parseDate(member.lastSpoke);
+  const diffDays = daysBetween(last, TODAY);
+  const threshold = member.group === 'youth' ? 365 : 730;
+  if (diffDays >= threshold) {
+    const overdueDays = Math.floor(diffDays - threshold);
+    return { status: 'overdue', label: `${overdueDays}d overdue`, priority: overdueDays };
+  }
+  const remaining = Math.ceil(threshold - diffDays);
+  return { status: 'not-yet', label: `Eligible in ${remaining}d`, priority: -remaining };
+}
+
+function getSortedMembers(group) {
+  return members
+    .filter(m => m.group === group)
+    .map(m => ({ ...m, elig: getEligibility(m) }))
+    .sort((a, b) => b.elig.priority - a.elig.priority);
+}
+
+function getNewMembers() {
+  return members.filter(m => m.isNew);
+}
+
+// ── ASSIGNMENTS ───────────────────────────────────────────────────
+function getAssignmentsForSunday(dateStr) {
+  return assignments.filter(a => a.sundayDate === dateStr && a.status !== 'DECLINED');
+}
+function getAdultAssignments(dateStr) {
+  return getAssignmentsForSunday(dateStr).filter(a => {
+    const m = members.find(x => x.id === a.memberId);
+    return m && m.group === 'adult';
+  });
+}
+function getYouthAssignments(dateStr) {
+  return getAssignmentsForSunday(dateStr).filter(a => {
+    const m = members.find(x => x.id === a.memberId);
+    return m && m.group === 'youth';
+  });
+}
+function createAssignment(memberId, sundayDate) {
+  const a = {
+    id: nextAssignId++, memberId, sundayDate,
+    status: 'SUGGESTED', topic: '', notes: '',
+    history: [{ status: 'SUGGESTED', ts: new Date().toISOString() }]
+  };
+  assignments.push(a);
+  saveState();
+  return a;
+}
+function removeAssignment(assignId) {
+  assignments = assignments.filter(a => a.id !== assignId);
+  saveState();
+}
+
+// ── CSV IMPORT / MERGE ────────────────────────────────────────────
+function mergeImportedMembers(imported) {
+  const existingNames = new Set(members.map(m => normName(m.name)));
+  let added = 0, updated = 0, skipped = 0;
+  const newMemberNames = [];
+
+  for (const imp of imported) {
+    const nn = normName(imp.name);
+    if (existingNames.has(nn)) {
+      // Update existing member's phone/email/age if provided
+      const existing = members.find(m => normName(m.name) === nn);
+      if (existing) {
+        if (imp.phone && !existing.phone) existing.phone = imp.phone;
+        if (imp.email && !existing.email) existing.email = imp.email;
+        if (imp.age && imp.age !== existing.age) existing.age = imp.age;
+        if (imp.moveInDate && !existing.moveInDate) existing.moveInDate = imp.moveInDate;
+        existing.group = existing.age >= 12 && existing.age < 18 ? 'youth' : 'adult';
+        updated++;
+      }
+    } else {
+      // New member!
+      members.push({
+        id: nextMemberId++,
+        name: imp.name,
+        age: imp.age,
+        phone: imp.phone || '',
+        email: imp.email || '',
+        lastSpoke: null,
+        group: imp.age >= 12 && imp.age < 18 ? 'youth' : 'adult',
+        moveInDate: imp.moveInDate || TODAY_STR,
+        isNew: true, // flag as new move-in
+      });
+      existingNames.add(nn);
+      newMemberNames.push(imp.name);
+      added++;
+    }
+  }
+  skipped = imported.length - added - updated;
+  saveState();
+  return { added, updated, skipped, newMemberNames };
+}
+
+// ── CSV EXPORT ────────────────────────────────────────────────────
+function exportCSV() {
+  const header = 'Name,Age,Group,Phone,Email,Last Spoke,Move-In Date,Is New';
+  const rows = members.map(m =>
+    `"${m.name}",${m.age},${m.group},"${m.phone || ''}","${m.email || ''}",${m.lastSpoke || ''},${m.moveInDate || ''},${m.isNew ? 'yes' : 'no'}`
+  );
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ward-members-${TODAY_STR}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportAssignmentsCSV() {
+  const header = 'Speaker,Sunday,Status,Topic,Notes,Group,Age';
+  const rows = assignments.map(a => {
+    const m = members.find(x => x.id === a.memberId);
+    return `"${m ? m.name : '?'}",${a.sundayDate},${a.status},"${a.topic || ''}","${a.notes || ''}",${m ? m.group : ''},${m ? m.age : ''}`;
+  });
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `talk-assignments-${TODAY_STR}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── UI RENDERING ──────────────────────────────────────────────────
+function renderStats() {
+  const adults = members.filter(m => m.group === 'adult');
+  const youth = members.filter(m => m.group === 'youth');
+  const newMembers = getNewMembers();
+  const overdueCount = members.filter(m => { const e = getEligibility(m); return e.status === 'overdue' || e.status === 'new'; }).length;
+  const activeAssignments = assignments.filter(a => !['COMPLETED','DECLINED'].includes(a.status)).length;
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat-card"><div class="stat-num">${members.length}</div><div class="stat-label">Total Members</div></div>
+    <div class="stat-card"><div class="stat-num">${adults.length}</div><div class="stat-label">Adults (18+)</div></div>
+    <div class="stat-card"><div class="stat-num">${youth.length}</div><div class="stat-label">Youth (12-17)</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:${newMembers.length ? 'var(--warning)' : 'var(--muted)'}">${newMembers.length}</div><div class="stat-label">New Move-ins</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${overdueCount}</div><div class="stat-label">Need to Speak</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--warning)">${activeAssignments}</div><div class="stat-label">Active Assignments</div></div>
+  `;
+
+  // New member badge on tab
+  const badge = document.getElementById('new-badge');
+  if (newMembers.length > 0) {
+    badge.textContent = newMembers.length;
+    badge.style.display = 'flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function renderMoveInBanner() {
+  const newMembers = getNewMembers();
+  const unassigned = newMembers.filter(m => {
+    return !assignments.some(a => a.memberId === m.id && a.status !== 'DECLINED');
+  });
+  const el = document.getElementById('move-in-banner');
+  if (unassigned.length === 0) { el.innerHTML = ''; return; }
+
+  el.innerHTML = `<div class="alert-banner">
+    <div class="alert-banner-icon">&#9733;</div>
+    <div class="alert-banner-text">
+      <div class="alert-banner-title">${unassigned.length} new member${unassigned.length > 1 ? 's' : ''} not yet assigned a talk</div>
+      <div class="alert-banner-sub">${unassigned.map(m => m.name).join(', ')}</div>
+    </div>
+    <button class="btn btn-warning" onclick="switchTab('members'); document.getElementById('member-filter').value='new'; renderMembers();">View</button>
+  </div>`;
+}
+
+function renderCalendar() {
+  const sundays = getSchedulableSundays();
+  let html = '';
+  for (const s of sundays) {
+    const blocked = isBlocked(s);
+    const adultSlots = getAdultAssignments(s);
+    const youthSlots = getYouthAssignments(s);
+    const filledCount = adultSlots.length + youthSlots.length;
+    let labelClass = 'label-open', labelText = 'Open';
+    if (blocked) { labelClass = 'label-blocked'; labelText = blockReason(s); }
+    else if (filledCount === 3) { labelClass = 'label-full'; labelText = 'Fully Assigned'; }
+    else if (filledCount > 0) { labelClass = 'label-partial'; labelText = `${filledCount}/3 Assigned`; }
+
+    html += `<div class="sunday-card ${blocked ? 'blocked' : ''}">
+      <div class="sunday-header">
+        <span class="sunday-date">${fmtDate(s)}</span>
+        <span class="sunday-label ${labelClass}">${labelText}</span>
+      </div>`;
+    if (!blocked) {
+      html += renderSlot(adultSlots[0], s, 'adult', 'Adult 1 (12 min)');
+      html += renderSlot(adultSlots[1], s, 'adult', 'Adult 2 (12 min)');
+      html += renderSlot(youthSlots[0], s, 'youth', 'Youth (5 min)');
+    }
+    html += '</div>';
+  }
+  document.getElementById('panel-calendar').innerHTML = html;
+}
+
+function renderSlot(assignment, sundayDate, group, label) {
+  if (assignment) {
+    const m = members.find(x => x.id === assignment.memberId);
+    const statusClass = `status-${assignment.status.toLowerCase()}`;
+    const newTag = m && m.isNew ? '<span class="new-badge">NEW</span>' : '';
+    return `<div class="slot slot-${group}">
+      <span class="slot-label">${label}</span>
+      <span class="slot-name">${m ? m.name : '?'}${newTag}</span>
+      <span class="status-pill ${statusClass}">${assignment.status.replace('_',' ')}</span>
+      <button class="btn btn-sm btn-outline" onclick="openStatusModal(${assignment.id})">Update</button>
+      <button class="btn btn-sm btn-danger" onclick="removeAndRefresh(${assignment.id})">&#10005;</button>
+    </div>`;
+  }
+  return `<div class="slot slot-${group}">
+    <span class="slot-label">${label}</span>
+    <span class="slot-name slot-empty">Unassigned</span>
+    <button class="btn btn-sm btn-primary" onclick="openAssignModal('${sundayDate}','${group}')">+ Assign</button>
+  </div>`;
+}
+
+function renderMembers() {
+  const search = (document.getElementById('member-search')?.value || '').toLowerCase();
+  const filter = document.getElementById('member-filter')?.value || 'all';
+
+  let html = `<div class="filters">
+    <input type="text" id="member-search" placeholder="Search members..." value="${search}" oninput="renderMembers()">
+    <select id="member-filter" onchange="renderMembers()">
+      <option value="all" ${filter==='all'?'selected':''}>All</option>
+      <option value="adult" ${filter==='adult'?'selected':''}>Adults (18+)</option>
+      <option value="youth" ${filter==='youth'?'selected':''}>Youth (12-17)</option>
+      <option value="overdue" ${filter==='overdue'?'selected':''}>Overdue / Never Spoken</option>
+      <option value="new" ${filter==='new'?'selected':''}>New Move-ins</option>
+    </select>
+  </div>
+  <table><thead><tr>
+    <th>Name</th><th>Age</th><th>Group</th><th>Move-In</th><th>Last Spoke</th><th>Status</th><th>Actions</th>
+  </tr></thead><tbody>`;
+
+  let list = members.map(m => ({ ...m, elig: getEligibility(m) }));
+  if (search) list = list.filter(m => m.name.toLowerCase().includes(search));
+  if (filter === 'adult') list = list.filter(m => m.group === 'adult');
+  if (filter === 'youth') list = list.filter(m => m.group === 'youth');
+  if (filter === 'overdue') list = list.filter(m => m.elig.status === 'overdue');
+  if (filter === 'new') list = list.filter(m => m.isNew);
+
+  list.sort((a, b) => b.elig.priority - a.elig.priority);
+
+  for (const m of list) {
+    const groupBadge = m.group === 'youth'
+      ? '<span class="age-badge age-youth">Youth</span>'
+      : '<span class="age-badge age-adult">Adult</span>';
+    const newTag = m.isNew ? '<span class="new-badge">NEW</span>' : '';
+    const statusClass = m.elig.status === 'new' ? 'overdue' : m.elig.status === 'overdue' ? 'overdue' : m.elig.status === 'eligible' ? 'eligible' : 'not-yet';
+    const rowClass = m.isNew ? 'new-member-row' : '';
+    html += `<tr class="${rowClass}">
+      <td>${m.name}${newTag}</td>
+      <td>${m.age || '—'}</td>
+      <td>${groupBadge}</td>
+      <td>${m.moveInDate ? fmtDate(m.moveInDate) : '—'}</td>
+      <td>${m.lastSpoke ? fmtDate(m.lastSpoke) : '<em>Never</em>'}</td>
+      <td class="${statusClass}">${m.elig.label}</td>
+      <td>
+        <button class="btn btn-sm btn-outline" onclick="promptLastSpoke(${m.id})">Set Last Spoke</button>
+        ${m.isNew ? `<button class="btn btn-sm btn-success" onclick="clearNewFlag(${m.id})">Dismiss New</button>` : ''}
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  document.getElementById('panel-members').innerHTML = html;
+}
+
+function renderPipeline() {
+  const active = assignments.filter(a => !['COMPLETED','DECLINED'].includes(a.status));
+  if (active.length === 0) {
+    document.getElementById('panel-pipeline').innerHTML = '<p style="color:var(--muted);padding:20px;">No active assignments. Go to Calendar to assign speakers.</p>';
+    return;
+  }
+  let html = '';
+  const statusOrder = ['SUGGESTED','CONTACTED','ACCEPTED','TOPIC_SHARED','REMINDER_SENT'];
+  for (const status of statusOrder) {
+    const group = active.filter(a => a.status === status);
+    if (group.length === 0) continue;
+    html += `<h2 style="margin-top:16px;">${status.replace('_',' ')} (${group.length})</h2>`;
+    for (const a of group) {
+      const m = members.find(x => x.id === a.memberId);
+      const newTag = m && m.isNew ? '<span class="new-badge">NEW</span>' : '';
+      html += `<div class="pipeline-row">
+        <span class="pipeline-name">${m ? m.name : '?'}${newTag}</span>
+        <span class="pipeline-date">${fmtDate(a.sundayDate)}</span>
+        <span class="pipeline-topic">${a.topic || '<em>No topic</em>'}</span>
+        <span class="status-pill status-${a.status.toLowerCase()}">${a.status.replace('_',' ')}</span>
+        <button class="btn btn-sm btn-primary" onclick="openStatusModal(${a.id})">Update</button>
+      </div>`;
+    }
+  }
+  document.getElementById('panel-pipeline').innerHTML = html;
+}
+
+function renderHistory() {
+  const completed = assignments.filter(a => ['COMPLETED','DECLINED'].includes(a.status));
+  if (completed.length === 0) {
+    document.getElementById('panel-history').innerHTML = '<p style="color:var(--muted);padding:20px;">No completed or declined assignments yet.</p>';
+    return;
+  }
+  let html = '<div style="background:var(--card);border:1px solid var(--border);border-radius:8px;">';
+  completed.sort((a, b) => b.sundayDate.localeCompare(a.sundayDate));
+  for (const a of completed) {
+    const m = members.find(x => x.id === a.memberId);
+    const statusClass = `status-${a.status.toLowerCase()}`;
+    html += `<div class="history-entry">
+      <strong>${m ? m.name : '?'}</strong> &mdash; ${fmtDate(a.sundayDate)}
+      <span class="status-pill ${statusClass}" style="margin-left:8px;">${a.status}</span>
+      ${a.topic ? ` &middot; ${a.topic}` : ''}
+      ${a.notes ? `<br><span style="color:var(--muted);font-size:0.8rem;">${a.notes}</span>` : ''}
+    </div>`;
+  }
+  html += '</div>';
+  document.getElementById('panel-history').innerHTML = html;
+}
+
+function renderImport() {
+  document.getElementById('panel-import').innerHTML = `
+    <div class="import-section">
+      <h3>What to Ask the Clerk</h3>
+      <p>Ask your ward clerk to export a CSV from <strong>Leader and Clerk Resources (LCR)</strong> with these columns:</p>
+      <div class="csv-spec">
+        <strong>Required columns:</strong><br>
+        <code>Name</code> — Full name, "Last, First" or "Last, First & Spouse" format<br>
+        <code>Age</code> — Current age<br><br>
+        <strong>Optional (recommended):</strong><br>
+        <code>Phone</code> — Contact number<br>
+        <code>Email</code> — Email address<br>
+        <code>Move-In Date</code> — Date they moved into the ward (key for spotting new members!)<br><br>
+        <strong>LCR path:</strong> Member Directory → Export → CSV. Include "Move Date" column if available.
+      </div>
+      <p>The importer will match by name. <strong>New names</strong> are flagged as move-ins and surfaced for immediate talk assignment. Existing members get updated info.</p>
+    </div>
+
+    <div class="import-section">
+      <h3>Import Ward List (CSV)</h3>
+      <div class="import-drop" id="import-drop" onclick="document.getElementById('csv-file').click()">
+        <input type="file" id="csv-file" accept=".csv,.tsv,.txt" onchange="handleFileImport(event)">
+        <p><strong>Click to browse</strong> or drag & drop a CSV file</p>
+        <p style="font-size:0.75rem;color:var(--muted);">Accepts .csv, .tsv, .txt</p>
+      </div>
+      <div class="import-results" id="import-results"></div>
+    </div>
+
+    <div class="import-section">
+      <h3>Export Data</h3>
+      <div class="toolbar">
+        <button class="btn btn-primary" onclick="exportCSV()">Download Members CSV</button>
+        <button class="btn btn-outline" onclick="exportAssignmentsCSV()">Download Assignments CSV</button>
+      </div>
+      <p>Export your current member list or assignment history as CSV for backup or sharing.</p>
+    </div>
+
+    <div class="import-section">
+      <h3>Sample Import CSV</h3>
+      <div class="csv-spec" style="font-family:monospace;font-size:0.75rem;white-space:pre;overflow-x:auto;">Name,Age,Phone,Email,Move-In Date
+"Smith, John & Jane",35,801-555-1234,john@email.com,2026-02-15
+"Garcia, Maria",28,801-555-5678,maria@email.com,2026-03-01
+"Taylor, Brandon",14,,,2026-01-20</div>
+      <button class="btn btn-sm btn-outline" onclick="downloadSampleCSV()">Download Sample CSV</button>
+    </div>
+
+    <div class="import-section" style="border-color: var(--danger);">
+      <h3 style="color: var(--danger);">Reset All Data</h3>
+      <p>Clear everything and reload the original member list. This cannot be undone.</p>
+      <button class="btn btn-danger" onclick="resetAllData()">Reset to Defaults</button>
+    </div>
+  `;
+
+  // Drag and drop
+  const drop = document.getElementById('import-drop');
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('dragover'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+  drop.addEventListener('drop', (e) => {
+    e.preventDefault();
+    drop.classList.remove('dragover');
+    if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]);
+  });
+}
+
+function renderAll() {
+  renderStats();
+  renderMoveInBanner();
+  renderCalendar();
+  renderMembers();
+  renderPipeline();
+  renderHistory();
+  renderImport();
+}
+
+// ── IMPORT ACTIONS ────────────────────────────────────────────────
+function handleFileImport(e) {
+  if (e.target.files.length) processFile(e.target.files[0]);
+}
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    const imported = parseImportCSV(text);
+    const results = document.getElementById('import-results');
+
+    if (imported === null) {
+      results.className = 'import-results show error';
+      results.innerHTML = '<strong>Error:</strong> Could not find a "Name" column in the CSV header. Make sure the first row contains column headers including "Name".';
+      return;
+    }
+    if (imported.length === 0) {
+      results.className = 'import-results show error';
+      results.innerHTML = '<strong>Error:</strong> No valid rows found in the CSV.';
+      return;
+    }
+
+    const { added, updated, skipped, newMemberNames } = mergeImportedMembers(imported);
+
+    let msg = `<strong>Import complete!</strong><br>`;
+    msg += `${imported.length} people parsed from file<br>`;
+    msg += `<span style="color:var(--success);font-weight:600;">${added} new members added</span>`;
+    if (updated) msg += ` · ${updated} existing members updated`;
+    if (newMemberNames.length > 0) {
+      msg += `<br><br><strong>New move-ins:</strong><br>`;
+      msg += newMemberNames.map(n => `&#9733; ${n}`).join('<br>');
+      msg += `<br><br>These members are now flagged and prioritized for talk assignments.`;
+    }
+
+    results.className = 'import-results show';
+    results.innerHTML = msg;
+    renderAll();
+  };
+  reader.readAsText(file);
+}
+
+function downloadSampleCSV() {
+  const sample = `Name,Age,Phone,Email,Move-In Date
+"Smith, John & Jane",35,801-555-1234,john@email.com,2026-02-15
+"Garcia, Maria",28,801-555-5678,maria@email.com,2026-03-01
+"Taylor, Brandon",14,,,2026-01-20
+"Nguyen, David & Lisa",42,801-555-9012,david.n@email.com,
+"Petersen, Sister Ruth",71,,,2026-02-28`;
+  const blob = new Blob([sample], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'sample-ward-import.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function resetAllData() {
+  if (confirm('Reset ALL data? This clears all assignments, last-spoke dates, and imported members. Cannot be undone.')) {
+    localStorage.clear();
+    members = parseOriginalCSV(RAW_CSV);
+    assignments = [];
+    nextAssignId = 1;
+    nextMemberId = members.length + 1;
+    renderAll();
+  }
+}
+
+// ── MODALS & ACTIONS ──────────────────────────────────────────────
+let currentAssignSunday = null, currentAssignGroup = null, currentStatusAssignId = null;
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function switchTab(tabName) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tabName}"]`).classList.add('active');
+  document.getElementById('panel-' + tabName).classList.add('active');
+}
+
+function openAssignModal(sundayDate, group) {
+  currentAssignSunday = sundayDate;
+  currentAssignGroup = group;
+  document.getElementById('assign-modal-title').textContent = `Assign ${group === 'youth' ? 'Youth' : 'Adult'} Speaker`;
+  document.getElementById('assign-slot-info').textContent = `${fmtDate(sundayDate)} — ${group === 'youth' ? 'Youth (5 min)' : 'Adult (12 min)'}`;
+  document.getElementById('assign-search').value = '';
+  filterAssignList();
+  openModal('assign-modal');
+}
+
+function filterAssignList() {
+  const search = (document.getElementById('assign-search')?.value || '').toLowerCase();
+  const sorted = getSortedMembers(currentAssignGroup);
+  const alreadyAssigned = getAssignmentsForSunday(currentAssignSunday).map(a => a.memberId);
+
+  let html = '';
+  const filtered = sorted.filter(m => !alreadyAssigned.includes(m.id) && m.name.toLowerCase().includes(search));
+  for (const m of filtered.slice(0, 50)) {
+    const isNewMember = m.elig.status === 'new';
+    const prClass = isNewMember ? 'priority-new' : m.elig.status === 'overdue' ? 'priority-overdue' : m.elig.status === 'eligible' ? 'priority-eligible' : 'priority-not-yet';
+    const newTag = m.isNew ? ' <span class="new-badge">NEW</span>' : '';
+    html += `<div class="assign-item" onclick="assignMember(${m.id})">
+      <span class="assign-priority ${prClass}">${m.elig.label}</span>
+      <strong>${m.name}${newTag}</strong>
+      <span style="color:var(--muted);font-size:0.8rem;margin-left:auto;">age ${m.age}</span>
+    </div>`;
+  }
+  document.getElementById('assign-list').innerHTML = html || '<p style="color:var(--muted);padding:8px;">No matching members</p>';
+}
+
+function assignMember(memberId) {
+  createAssignment(memberId, currentAssignSunday);
+  closeModal('assign-modal');
+  renderAll();
+}
+
+function removeAndRefresh(assignId) {
+  if (confirm('Remove this assignment?')) {
+    removeAssignment(assignId);
+    renderAll();
+  }
+}
+
+function openStatusModal(assignId) {
+  currentStatusAssignId = assignId;
+  const a = assignments.find(x => x.id === assignId);
+  if (!a) return;
+  const m = members.find(x => x.id === a.memberId);
+  document.getElementById('status-modal-info').innerHTML = `<strong>${m ? m.name : '?'}</strong> — ${fmtDate(a.sundayDate)}`;
+  document.getElementById('status-select').value = a.status;
+  document.getElementById('status-topic').value = a.topic || '';
+  document.getElementById('status-notes').value = a.notes || '';
+  openModal('status-modal');
+}
+
+function saveStatus() {
+  const a = assignments.find(x => x.id === currentStatusAssignId);
+  if (!a) return;
+  const newStatus = document.getElementById('status-select').value;
+  const oldStatus = a.status;
+  a.status = newStatus;
+  a.topic = document.getElementById('status-topic').value;
+  a.notes = document.getElementById('status-notes').value;
+  if (newStatus !== oldStatus) {
+    a.history.push({ status: newStatus, ts: new Date().toISOString() });
+  }
+  if (newStatus === 'COMPLETED') {
+    const m = members.find(x => x.id === a.memberId);
+    if (m) {
+      m.lastSpoke = a.sundayDate;
+      if (m.isNew) m.isNew = false; // clear new flag once they've spoken
+    }
+  }
+  saveState();
+  closeModal('status-modal');
+  renderAll();
+}
+
+function promptLastSpoke(memberId) {
+  const dateStr = prompt('Enter last spoke date (YYYY-MM-DD):');
+  if (!dateStr) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) { alert('Invalid date format. Use YYYY-MM-DD.'); return; }
+  const m = members.find(x => x.id === memberId);
+  if (m) { m.lastSpoke = dateStr; saveState(); renderAll(); }
+}
+
+function clearNewFlag(memberId) {
+  const m = members.find(x => x.id === memberId);
+  if (m) { m.isNew = false; saveState(); renderAll(); }
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// ── INIT ──────────────────────────────────────────────────────────
+renderAll();
+</script>
+</body>
+</html>
